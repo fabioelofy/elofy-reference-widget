@@ -5,6 +5,13 @@
 	const PANEL_SIZE = { width: 360, height: 480 }
 	const TOKEN_ATTRIBUTE = 'data-elofy-token'
 	const TOKEN_FUNCTION = 'elofyReferenceWidgetToken'
+	const CLAIM_LABELS = {
+		user_id: 'ID do usuário',
+		user_name: 'Nome',
+		job_title: 'Cargo',
+		company_id: 'ID da empresa',
+		company_name: 'Empresa',
+	}
 
 	const script = document.currentScript
 	if (!script || window.parent === window) return
@@ -70,10 +77,14 @@
 		'box-sizing:border-box;width:352px;height:472px;margin:4px;padding:16px;border-radius:12px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.2);font:14px sans-serif;color:#1d2939'
 
 	const title = document.createElement('strong')
-	title.textContent = config['data-title'] || 'Widget de referencia'
+	title.textContent = config['data-title'] || 'Widget de referência'
 
 	const status = document.createElement('p')
 	status.setAttribute('data-reference-widget', 'status')
+
+	const claims = document.createElement('dl')
+	claims.setAttribute('data-reference-widget', 'claims')
+	claims.style.cssText = 'margin:0 0 12px;font:13px sans-serif'
 
 	const close = document.createElement('button')
 	close.setAttribute('type', 'button')
@@ -82,16 +93,49 @@
 
 	panel.appendChild(title)
 	panel.appendChild(status)
+	panel.appendChild(claims)
 	panel.appendChild(close)
 	root.appendChild(button)
 	root.appendChild(panel)
 	document.body.appendChild(root)
 
+	function decodeClaims(token) {
+		try {
+			const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+			const json = decodeURIComponent(
+				Array.prototype.map
+					.call(window.atob(payload), char => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
+					.join(''),
+			)
+			return JSON.parse(json)
+		} catch (error) {
+			return {}
+		}
+	}
+
+	function renderClaims() {
+		while (claims.firstChild) claims.removeChild(claims.firstChild)
+		const payload = state.token ? decodeClaims(state.token) : {}
+		Object.keys(CLAIM_LABELS).forEach(key => {
+			if (payload[key] === undefined) return
+			const term = document.createElement('dt')
+			term.style.cssText = 'color:#667085'
+			term.textContent = CLAIM_LABELS[key]
+			const value = document.createElement('dd')
+			value.style.cssText = 'margin:0 0 6px'
+			value.setAttribute('data-claim', key)
+			value.textContent = String(payload[key])
+			claims.appendChild(term)
+			claims.appendChild(value)
+		})
+	}
+
 	function render() {
 		const visits = Number(storage.get('reference-widget-visits') || 0)
 		status.textContent = state.token
-			? 'Identificado pelo Elofy (token recebido; valide no seu servidor pelo JWKS).'
-			: 'Sem identificacao.'
+			? 'Identificado pelo Elofy. Dados lidos do token sem validar: valide a assinatura no seu servidor pelo JWKS.'
+			: 'Sem identificação.'
+		renderClaims()
 		status.setAttribute('data-visits', String(visits))
 		status.setAttribute('data-identified', state.token ? 'true' : 'false')
 	}
